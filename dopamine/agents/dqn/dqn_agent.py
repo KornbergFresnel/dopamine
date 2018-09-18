@@ -62,7 +62,7 @@ def linearly_decaying_epsilon(decay_period, step, warmup_steps, epsilon):
   return epsilon + bonus
 
 
-def adaptive_epsilon(action_dim, td_err, epsilon):
+def adaptive_epsilon(sigma, action_dim, td_err, epsilon):
   """Returns the current epsilon for the agent's epsilon-greedy policy.
 
   Note
@@ -108,6 +108,7 @@ class DQNAgent(object):
                tf_device='/cpu:*',
                use_staging=True,
                max_tf_checkpoints_to_keep=3,
+               sigma=0.04
                optimizer=tf.train.RMSPropOptimizer(
                    learning_rate=0.00025,
                    decay=0.95,
@@ -170,6 +171,7 @@ class DQNAgent(object):
     self.training_steps = 0
     self.optimizer = optimizer
     self.last_td_err = np.inf
+    self.sigma = sigma
 
     if epsilon_fn not in ['linear', 'adaptive']:
       raise Exception('Unexcepted epsilon function type: %s' % str(epsilon_fn))
@@ -393,7 +395,7 @@ class DQNAgent(object):
         epsilon = linearly_decaying_epsilon(self.epsilon_decay_period, self.training_steps,
                                               self.min_replay_history, self.epsilon_train)
       elif self.epsilon_fn == 'adaptive':
-        epsilon = adaptive_epsilon(self.num_actions, self.last_td_err, self.epsilon_train))
+        epsilon = adaptive_epsilon(self.sigma, self.num_actions, self.last_td_err, self.epsilon_train))
 
     if random.random() <= epsilon:
       # Choose a random action with probability epsilon.
