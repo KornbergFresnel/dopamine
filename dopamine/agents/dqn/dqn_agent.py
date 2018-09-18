@@ -23,7 +23,6 @@ import os
 import random
 
 
-
 from dopamine.replay_memory import circular_replay_buffer
 import numpy as np
 import tensorflow as tf
@@ -46,19 +45,43 @@ def linearly_decaying_epsilon(decay_period, step, warmup_steps, epsilon):
     Linearly decay epsilon from 1. to epsilon in decay_period steps; and then
     Use epsilon from there on.
 
-  Args:
-    decay_period: float, the period over which epsilon is decayed.
-    step: int, the number of training steps completed so far.
-    warmup_steps: int, the number of steps taken before epsilon is decayed.
-    epsilon: float, the final value to which to decay the epsilon parameter.
+  Parameters
+  -----------
+  decay_period: float, the period over which epsilon is decayed.
+  step: int, the number of training steps completed so far.
+  warmup_steps: int, the number of steps taken before epsilon is decayed.
+  epsilon: float, the final value to which to decay the epsilon parameter.
 
-  Returns:
-    A float, the current epsilon value computed according to the schedule.
+  Returns
+  -------
+  A float, the current epsilon value computed according to the schedule.
   """
   steps_left = decay_period + warmup_steps - step
   bonus = (1.0 - epsilon) * steps_left / decay_period
   bonus = np.clip(bonus, 0., 1. - epsilon)
   return epsilon + bonus
+
+
+def adaptive_epsilon(decay_period, step, warmp_steps, epsilon):
+  """Returns the current epsilon for the agent's epsilon-greedy policy.
+
+  Note
+  ----
+  This follows the [Adaptive epsilon-greedy Exploration method](http://tokic.com/www/tokicm/publikationen/papers/AdaptiveEpsilonGreedyExploration.pdf).
+  The schedule is as follow:
+  blahblah ...
+
+  Parameters
+  ----------
+  decay_period: int
+  warmp_steps: int
+  epsilon: float, last epsilon value
+
+  Returns
+  -------
+  A float, the current epsilong value computed according to the schedule
+  """
+  raise NotImplementedError
 
 
 @gin.configurable
@@ -107,7 +130,7 @@ class DQNAgent(object):
       epsilon_decay_period: int, length of the epsilon decay schedule.
       tf_device: str, Tensorflow device on which the agent's graph is executed.
       use_staging: bool, when True use a staging area to prefetch the next
-        training batch, speeding training up by about 30%.
+        training batch, speeding training up by about 30 % .
       max_tf_checkpoints_to_keep: int, the number of TensorFlow checkpoints to
         keep.
       optimizer: `tf.train.Optimizer`, for training the value function.
@@ -200,7 +223,7 @@ class DQNAgent(object):
       self._q_argmax: The action maximizing the current state's Q-values.
       self._replay_net_outputs: The replayed states' Q-values.
       self._replay_next_target_net_outputs: The replayed next states' target
-        Q-values (see Mnih et al., 2015 for details).
+        Q-values(see Mnih et al., 2015 for details).
     """
     # Calling online_convnet will generate a new graph as defined in
     # self._get_network_template using whatever input is passed, but will always
@@ -323,7 +346,8 @@ class DQNAgent(object):
     self._record_observation(observation)
 
     if not self.eval_mode:
-      self._store_transition(self._last_observation, self.action, reward, False)
+      self._store_transition(self._last_observation,
+                             self.action, reward, False)
       self._train_step()
 
     self.action = self._select_action()
@@ -424,7 +448,7 @@ class DQNAgent(object):
     """Returns a self-contained bundle of the agent's state.
 
     This is used for checkpointing. It will return a dictionary containing all
-    non-TensorFlow objects (to be saved into a file by the caller), and it saves
+    non-TensorFlow objects(to be saved into a file by the caller), and it saves
     all TensorFlow objects into a checkpoint file.
 
     Args:
