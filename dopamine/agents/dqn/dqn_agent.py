@@ -62,7 +62,7 @@ def linearly_decaying_epsilon(decay_period, step, warmup_steps, epsilon):
   return epsilon + bonus
 
 
-def adaptive_epsilon(decay_period, step, warmp_steps, epsilon):
+def adaptive_epsilon(action_dim, td_err, epsilon):
   """Returns the current epsilon for the agent's epsilon-greedy policy.
 
   Note
@@ -73,15 +73,20 @@ def adaptive_epsilon(decay_period, step, warmp_steps, epsilon):
 
   Parameters
   ----------
-  decay_period: int
-  warmp_steps: int
+  action_dim: int, 
+  td_err: float, TD-error of last training round
   epsilon: float, last epsilon value
 
   Returns
   -------
   A float, the current epsilong value computed according to the schedule
   """
-  raise NotImplementedError
+
+  exp_td = np.exp(-abs(td_err) / sigma)
+  f = (1. - exp_td) / (1 + exp_td)
+  delta = 1 / action_dim
+
+  return delta * f + (1 - delta) * epsilon
 
 
 @gin.configurable
@@ -96,7 +101,7 @@ class DQNAgent(object):
                min_replay_history=20000,
                update_period=4,
                target_update_period=8000,
-               epsilon_fn=linearly_decaying_epsilon,
+               epsilon_fn='linear',
                epsilon_train=0.01,
                epsilon_eval=0.001,
                epsilon_decay_period=250000,
@@ -164,6 +169,10 @@ class DQNAgent(object):
     self.eval_mode = False
     self.training_steps = 0
     self.optimizer = optimizer
+    self.last_td_err = np.inf
+
+    if epsilon_fn not in ['linear', 'adaptive']:
+      raise Exception('Unexcepted epsilon function type: %s' % str(epsilon_fn))
 
     with tf.device(tf_device):
       # Create a placeholder for the state input to the DQN network.
@@ -290,6 +299,9 @@ class DQNAgent(object):
         name='replay_chosen_q')
 
     target = tf.stop_gradient(self._build_target_q_op())
+
+    # record TD-Error tensor
+    self._td_error_tf = tf.reduce_mean(target - replay_chosen_q)
     loss = tf.losses.huber_loss(
         target, replay_chosen_q, reduction=tf.losses.Reduction.NONE)
     return self.optimizer.minimize(tf.reduce_mean(loss))
@@ -374,11 +386,15 @@ class DQNAgent(object):
     Returns:
        int, the selected action.
     """
-    epsilon = self.epsilon_eval if self.eval_mode else self.epsilon_fn(
-        self.epsilon_decay_period,
-        self.training_steps,
-        self.min_replay_history,
-        self.epsilon_train)
+    if self.eval_mode:
+      epsilon = self.epsilon_eval
+    else:
+      if self.epsilon_fn == 'linear':
+        epsilon = linearly_decaying_epsilon(self.epsilon_decay_period, self.training_steps,
+                                              self.min_replay_history, self.epsilon_train)
+      elif self.epsilon_fn == 'adaptive':
+        epsilon = adaptive_epsilon(self.num_actions, self.last_td_err, self.epsilon_train))
+
     if random.random() <= epsilon:
       # Choose a random action with probability epsilon.
       return random.randint(0, self.num_actions - 1)
@@ -400,7 +416,7 @@ class DQNAgent(object):
     # have been run. This matches the Nature DQN behaviour.
     if self._replay.memory.add_count > self.min_replay_history:
       if self.training_steps % self.update_period == 0:
-        self._sess.run(self._train_op)
+        _, self.lats_td_err = self._sess.run([self._train_op, self._td_error_tf])
 
       if self.training_steps % self.target_update_period == 0:
         self._sess.run(self._sync_qt_ops)
