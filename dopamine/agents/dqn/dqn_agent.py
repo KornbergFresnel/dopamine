@@ -73,7 +73,7 @@ def adaptive_epsilon(sigma, action_dim, td_err, epsilon):
 
     Parameters
     ----------
-    action_dim: int, 
+    action_dim: int,
     td_err: float, TD-error of last training round
     epsilon: float, last epsilon value
 
@@ -431,7 +431,7 @@ class DQNAgent(object):
         # have been run. This matches the Nature DQN behaviour.
         if self._replay.memory.add_count > self.min_replay_history:
             if self.training_steps % self.update_period == 0:
-                _, self.lats_td_err = self._sess.run(
+                _, self.last_td_err = self._sess.run(
                     [self._train_op, self._td_error_tf])
 
             if self.training_steps % self.target_update_period == 0:
