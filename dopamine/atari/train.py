@@ -20,7 +20,6 @@ from __future__ import division
 from __future__ import print_function
 
 
-
 from absl import app
 from absl import flags
 from dopamine.agents.dqn import dqn_agent
@@ -45,7 +44,7 @@ flags.DEFINE_multi_string(
     '(e.g. "DQNAgent.epsilon_train=0.1",'
     '      "create_environment.game_name="Pong"").')
 flags.DEFINE_string(
-    'schedule', 'continuous_train_and_eval',
+    'schedule', 'continuous_train',
     'The schedule with which to run the experiment and choose an appropriate '
     'Runner. Supported choices are '
     '{continuous_train, continuous_train_and_eval}.')
@@ -53,82 +52,81 @@ flags.DEFINE_string(
 FLAGS = flags.FLAGS
 
 
-
 def create_agent(sess, environment):
-  """Creates a DQN agent.
+    """Creates a DQN agent.
 
-  Args:
-    sess: A `tf.Session` object for running associated ops.
-    environment: An Atari 2600 Gym environment.
+    Args:
+      sess: A `tf.Session` object for running associated ops.
+      environment: An Atari 2600 Gym environment.
 
-  Returns:
-    agent: An RL agent.
+    Returns:
+      agent: An RL agent.
 
-  Raises:
-    ValueError: If `agent_name` is not in supported list.
-  """
-  if FLAGS.agent_name == 'dqn':
-    return dqn_agent.DQNAgent(sess, num_actions=environment.action_space.n)
-  elif FLAGS.agent_name == 'rainbow':
-    return rainbow_agent.RainbowAgent(
-        sess, num_actions=environment.action_space.n)
-  elif FLAGS.agent_name == 'implicit_quantile':
-    return implicit_quantile_agent.ImplicitQuantileAgent(
-        sess, num_actions=environment.action_space.n)
-  else:
-    raise ValueError('Unknown agent: {}'.format(FLAGS.agent_name))
+    Raises:
+      ValueError: If `agent_name` is not in supported list.
+    """
+    if FLAGS.agent_name == 'dqn':
+        return dqn_agent.DQNAgent(sess, num_actions=environment.action_space.n)
+    elif FLAGS.agent_name == 'rainbow':
+        return rainbow_agent.RainbowAgent(
+            sess, num_actions=environment.action_space.n)
+    elif FLAGS.agent_name == 'implicit_quantile':
+        return implicit_quantile_agent.ImplicitQuantileAgent(
+            sess, num_actions=environment.action_space.n)
+    else:
+        raise ValueError('Unknown agent: {}'.format(FLAGS.agent_name))
 
 
 def create_runner(base_dir, create_agent_fn):
-  """Creates an experiment Runner.
+    """Creates an experiment Runner.
 
-  Args:
-    base_dir: str, base directory for hosting all subdirectories.
-    create_agent_fn: A function that takes as args a Tensorflow session and an
-     Atari 2600 Gym environment, and returns an agent.
+    Args:
+      base_dir: str, base directory for hosting all subdirectories.
+      create_agent_fn: A function that takes as args a Tensorflow session and an
+       Atari 2600 Gym environment, and returns an agent.
 
-  Returns:
-    runner: A `run_experiment.Runner` like object.
+    Returns:
+      runner: A `run_experiment.Runner` like object.
 
-  Raises:
-    ValueError: When an unknown schedule is encountered.
-  """
-  assert base_dir is not None
-  # Continuously runs training and evaluation until max num_iterations is hit.
-  if FLAGS.schedule == 'continuous_train_and_eval':
-    return run_experiment.Runner(base_dir, create_agent_fn)
-  # Continuously runs training until max num_iterations is hit.
-  elif FLAGS.schedule == 'continuous_train':
-    return run_experiment.TrainRunner(base_dir, create_agent_fn)
-  else:
-    raise ValueError('Unknown schedule: {}'.format(FLAGS.schedule))
+    Raises:
+      ValueError: When an unknown schedule is encountered.
+    """
+    assert base_dir is not None
+    # Continuously runs training and evaluation until max num_iterations is hit.
+    if FLAGS.schedule == 'continuous_train_and_eval':
+        return run_experiment.Runner(base_dir, create_agent_fn)
+    # Continuously runs training until max num_iterations is hit.
+    elif FLAGS.schedule == 'continuous_train':
+        return run_experiment.TrainRunner(base_dir, create_agent_fn)
+    else:
+        raise ValueError('Unknown schedule: {}'.format(FLAGS.schedule))
 
 
 def launch_experiment(create_runner_fn, create_agent_fn):
-  """Launches the experiment.
+    """Launches the experiment.
 
-  Args:
-    create_runner_fn: A function that takes as args a base directory and a
-      function for creating an agent and returns a `Runner`-like object.
-    create_agent_fn: A function that takes as args a Tensorflow session and an
-     Atari 2600 Gym environment, and returns an agent.
-  """
-  run_experiment.load_gin_configs(FLAGS.gin_files, FLAGS.gin_bindings)
-  runner = create_runner_fn(FLAGS.base_dir, create_agent_fn)
-  runner.run_experiment()
+    Args:
+      create_runner_fn: A function that takes as args a base directory and a
+        function for creating an agent and returns a `Runner`-like object.
+      create_agent_fn: A function that takes as args a Tensorflow session and an
+       Atari 2600 Gym environment, and returns an agent.
+    """
+    run_experiment.load_gin_configs(FLAGS.gin_files, FLAGS.gin_bindings)
+    runner = create_runner_fn(FLAGS.base_dir, create_agent_fn)
+    runner.run_experiment()
 
 
 def main(unused_argv):
-  """Main method.
+    """Main method.
 
-  Args:
-    unused_argv: Arguments (unused).
-  """
-  tf.logging.set_verbosity(tf.logging.INFO)
-  launch_experiment(create_runner, create_agent)
+    Args:
+      unused_argv: Arguments (unused).
+    """
+    tf.logging.set_verbosity(tf.logging.INFO)
+    launch_experiment(create_runner, create_agent)
 
 
 if __name__ == '__main__':
-  flags.mark_flag_as_required('agent_name')
-  flags.mark_flag_as_required('base_dir')
-  app.run(main)
+    flags.mark_flag_as_required('agent_name')
+    flags.mark_flag_as_required('base_dir')
+    app.run(main)
