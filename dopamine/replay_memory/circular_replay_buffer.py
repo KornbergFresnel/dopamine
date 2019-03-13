@@ -196,7 +196,9 @@ class OutOfGraphReplayBuffer(object):
                       self._observation_dtype),
         ReplayElement('action', (), np.int32),
         ReplayElement('reward', (), np.float32),
-        ReplayElement('terminal', (), np.uint8)
+        ReplayElement('terminal', (), np.uint8),
+        ReplayElement('last_terminal', (), np.uint8),
+        ReplayElement('last_reward'), (), np.float32)
     ]
 
     for extra_replay_element in self._extra_storage_types:
@@ -334,6 +336,9 @@ class OutOfGraphReplayBuffer(object):
   def get_terminal_stack(self, index):
     return self.get_range(self._store['terminal'], index - self._stack_size + 1,
                           index + 1)
+
+  def get_last_terminal_stack(self, index):
+    return self.get_range(self._store['last_terminal'], index - self._stack_size + 1, index)
 
   def is_valid_transition(self, index):
     """Checks if the index contains a valid transition.
@@ -485,6 +490,7 @@ class OutOfGraphReplayBuffer(object):
           self._cumulative_discount_vector[:trajectory_length])
       trajectory_rewards = self.get_range(self._store['reward'], state_index,
                                           next_state_index)
+      trajectory_last_rewards = self.get_range(self._store['reward'], (state_index - 1) % self._replay_capacity, state_index)
 
       # Fill the contents of each array in the sampled batch.
       assert len(transition_elements) == len(batch_arrays)
@@ -495,6 +501,9 @@ class OutOfGraphReplayBuffer(object):
           # cumpute the discounted sum of rewards in the trajectory.
           element_array[batch_element] = trajectory_discount_vector.dot(
               trajectory_rewards)
+        elif element.name == 'last_reward':
+          element_array[bach_element] = trajectory_discount_vector.dot(
+              trajectory_last_rewards)
         elif element.name == 'next_state':
           element_array[batch_element] = self.get_observation_stack(
               (next_state_index) % self._replay_capacity)
@@ -528,7 +537,9 @@ class OutOfGraphReplayBuffer(object):
         ReplayElement('next_state', (batch_size,) + self._state_shape,
                       self._observation_dtype),
         ReplayElement('terminal', (batch_size,), np.uint8),
-        ReplayElement('indices', (batch_size,), np.int32)
+        ReplayElement('indices', (batch_size,), np.int32),
+        ReplayElement('last_reward', (batch_size,), np.float32),
+        ReplayElement('last_terminal', (batch_size,), np.uint8)
     ]
     for element in self._extra_storage_types:
       transition_elements.append(
@@ -658,7 +669,8 @@ class WrappedReplayBuffer(object):
                wrapped_memory=None,
                max_sample_attempts=MAX_SAMPLE_ATTEMPTS,
                extra_storage_types=None,
-               observation_dtype=np.uint8):
+               observation_dtype=np.uint8,
+               use_last=False):
     """Initializes WrappedReplayBuffer.
 
     Args:
@@ -694,6 +706,7 @@ class WrappedReplayBuffer(object):
       raise ValueError('Discount factor (gamma) must be in [0, 1].')
 
     self.batch_size = batch_size
+    self.use_last = use_last
 
     # Mainly used to allow subclasses to pass self.memory.
     if wrapped_memory is not None:
@@ -814,6 +827,8 @@ class WrappedReplayBuffer(object):
     self.next_states = self.transition['next_state']
     self.terminals = self.transition['terminal']
     self.indices = self.transition['indices']
+    self.last_terminals = self.transition['last_terminal']
+    self.last_rewards = self.transition['last_reward']
 
   def save(self, checkpoint_dir, iteration_number):
     """Save the underlying replay buffer's contents in a file.

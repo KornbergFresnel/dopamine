@@ -114,7 +114,8 @@ class DQNAgent(object):
                      decay=0.95,
                      momentum=0.0,
                      epsilon=0.00001,
-                     centered=True)):
+                     centered=True),
+                 use_rectifer=False):
         """Initializes the agent and constructs the components of its graph.
 
         Args:
@@ -155,6 +156,7 @@ class DQNAgent(object):
         tf.logging.info('\t tf_device: %s', tf_device)
         tf.logging.info('\t use_staging: %s', use_staging)
         tf.logging.info('\t optimizer: %s', optimizer)
+        tf.logging.info('\t use rectifer: {}'.format(use_rectifer))
 
         self.num_actions = num_actions
         self.gamma = gamma
@@ -172,6 +174,8 @@ class DQNAgent(object):
         self.optimizer = optimizer
         self.last_td_err = np.inf
         self.sigma = sigma
+        self.rec_factor = 0.1
+        self.use_rectifer = use_rectifer
 
         if not self.eval_mode:
             self.epsilon_eval = 1.0
@@ -258,6 +262,8 @@ class DQNAgent(object):
         self._replay_net_outputs = self.online_convnet(self._replay.states)
         self._replay_next_target_net_outputs = self.target_convnet(
             self._replay.next_states)
+        self._replay_last_next_target_net_outputs = self.target_convnet(
+                self._replay.states)
 
     def _build_replay_buffer(self, use_staging):
         """Creates the replay buffer used by the agent.
@@ -274,7 +280,7 @@ class DQNAgent(object):
             stack_size=STACK_SIZE,
             use_staging=use_staging,
             update_horizon=self.update_horizon,
-            gamma=self.gamma)
+            gamma=self.gamma, use_last=self.use_rectifer)
 
     def _build_target_q_op(self):
         """Build an op used as a target for the Q-value.
@@ -292,8 +298,16 @@ class DQNAgent(object):
         #          (or) 0 if S_t is a terminal state,
         # and
         #   N is the update horizon (by default, N=1).
-        return self._replay.rewards + self.cumulative_gamma * replay_next_qt_max * (
+        if self.use_rectifer:
+            return (1. + self.rec_factor * self.cumulative_gamma) * self._replay.rewards + self.cumulative_gamma * replay_next_qt_max * (
             1. - tf.cast(self._replay.terminals, tf.float32))
+        else:
+            return self._replay.rewards + self.cumulative_gamma * replay_next_qt_max * (1. - tf.cast(self._replay.terminals, tf.float32))
+
+    def _build_last_target_q_op(self):
+        replay_next_qt_max = tf.reduce_max(
+                self._replay_last_next_target_net_outputs.q_values, 1)
+        return self._replay.last_rewards + self.cumulative_gamma * replay_next_qt_max * (1. - tf.cast(self._replay.last_terminals, tf.float32))
 
     def _build_train_op(self):
         """Builds a training op.
@@ -307,6 +321,11 @@ class DQNAgent(object):
             self._replay_net_outputs.q_values * replay_action_one_hot,
             reduction_indices=1,
             name='replay_chosen_q')
+
+        if self.use_rectifer:
+            # TODO(ming): can use last time step
+            last_target = tf.stop_gradient(self._build_target_q_op())
+            replay_chosen_q += self.rec_factor * last_target
 
         target = tf.stop_gradient(self._build_target_q_op())
 

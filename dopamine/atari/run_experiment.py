@@ -312,6 +312,7 @@ class Runner(object):
             step_count += episode_length
             sum_returns += episode_return
             num_episodes += 1
+            sum_epsilon += epsilon
             # We use sys.stdout.write instead of tf.logging so as to flush frequently
             # without generating a line break.
             sys.stdout.write('Steps executed: {0}/{1} '.format(step_count, min_steps) + 'Epsilon: {} '.format(epsilon) +
