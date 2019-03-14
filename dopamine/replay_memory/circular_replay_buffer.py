@@ -197,8 +197,6 @@ class OutOfGraphReplayBuffer(object):
         ReplayElement('action', (), np.int32),
         ReplayElement('reward', (), np.float32),
         ReplayElement('terminal', (), np.uint8),
-        ReplayElement('last_terminal', (), np.uint8),
-        ReplayElement('last_reward'), (), np.float32)
     ]
 
     for extra_replay_element in self._extra_storage_types:
@@ -248,14 +246,14 @@ class OutOfGraphReplayBuffer(object):
     Args:
       *args: All the elements in a transition.
     """
-    cursor = self.cursor()
+    cursor=self.cursor()
 
-    arg_names = [e.name for e in self.get_add_args_signature()]
+    arg_names=[e.name for e in self.get_add_args_signature()]
     for arg_name, arg in zip(arg_names, args):
-      self._store[arg_name][cursor] = arg
+      self._store[arg_name][cursor]=arg
 
     self.add_count += 1
-    self.invalid_range = invalid_range(
+    self.invalid_range=invalid_range(
         self.cursor(), self._replay_capacity, self._stack_size,
         self._update_horizon)
 
