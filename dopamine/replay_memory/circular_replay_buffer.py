@@ -477,18 +477,24 @@ class OutOfGraphReplayBuffer(object):
                             for j in range(self._update_horizon)]
       trajectory_terminals = self._store['terminal'][trajectory_indices]
       is_terminal_transition = trajectory_terminals.any()
+
       if not is_terminal_transition:
         trajectory_length = self._update_horizon
       else:
         # np.argmax of a bool array returns the index of the first True.
         trajectory_length = np.argmax(trajectory_terminals.astype(np.bool),
                                       0) + 1
+      # HINT(ming): for exploration
+      last_trajectory_indices = [(state_index - trajectory_length + j) % self._replay_capacity for j in range(self._update_horizon)]
+      last_trajectory_terminals = self._store['terminal'][last_trajectory_indices]
+      is_last_terminal_transition = last_trajectory_terminals.any()
+
       next_state_index = state_index + trajectory_length
       trajectory_discount_vector = (
           self._cumulative_discount_vector[:trajectory_length])
       trajectory_rewards = self.get_range(self._store['reward'], state_index,
                                           next_state_index)
-      trajectory_last_rewards = self.get_range(self._store['reward'], (state_index - 1) % self._replay_capacity, state_index)
+      trajectory_last_rewards = self.get_range(self._store['reward'], (state_index - trajectory_length) % self._replay_capacity, state_index)
 
       # Fill the contents of each array in the sampled batch.
       assert len(transition_elements) == len(batch_arrays)
@@ -499,14 +505,16 @@ class OutOfGraphReplayBuffer(object):
           # cumpute the discounted sum of rewards in the trajectory.
           element_array[batch_element] = trajectory_discount_vector.dot(
               trajectory_rewards)
-        elif element.name == 'last_reward':
-          element_array[bach_element] = trajectory_discount_vector.dot(
+        elif element.name == 'last_reward':  # HINT(ming): for exploration
+          element_array[batch_element] = trajectory_discount_vector.dot(
               trajectory_last_rewards)
         elif element.name == 'next_state':
           element_array[batch_element] = self.get_observation_stack(
               (next_state_index) % self._replay_capacity)
         elif element.name == 'terminal':
           element_array[batch_element] = is_terminal_transition
+        elif element.name == 'last_terminal':  # HINT(ming): for exploration
+          element_array[batch_element] = is_last_terminal_transition
         elif element.name == 'indices':
           element_array[batch_element] = state_index
         elif element.name in self._store.keys():
@@ -536,6 +544,7 @@ class OutOfGraphReplayBuffer(object):
                       self._observation_dtype),
         ReplayElement('terminal', (batch_size,), np.uint8),
         ReplayElement('indices', (batch_size,), np.int32),
+        # HINT(ming): for exploration
         ReplayElement('last_reward', (batch_size,), np.float32),
         ReplayElement('last_terminal', (batch_size,), np.uint8)
     ]

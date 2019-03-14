@@ -115,7 +115,7 @@ class DQNAgent(object):
                      momentum=0.0,
                      epsilon=0.00001,
                      centered=True),
-                 use_rectifer=False):
+                 use_rectifer=True):
         """Initializes the agent and constructs the components of its graph.
 
         Args:
@@ -299,15 +299,15 @@ class DQNAgent(object):
         # and
         #   N is the update horizon (by default, N=1).
         if self.use_rectifer:
-            return (1. + self.rec_factor * self.cumulative_gamma) * self._replay.rewards + self.cumulative_gamma * replay_next_qt_max * (
-            1. - tf.cast(self._replay.terminals, tf.float32))
+            return (1. + self.rec_factor * self.cumulative_gamma) * (self._replay.rewards + self.cumulative_gamma * replay_next_qt_max * (
+            1. - tf.cast(self._replay.terminals, tf.float32)))
         else:
             return self._replay.rewards + self.cumulative_gamma * replay_next_qt_max * (1. - tf.cast(self._replay.terminals, tf.float32))
-
+    
     def _build_last_target_q_op(self):
-        replay_next_qt_max = tf.reduce_max(
-                self._replay_last_next_target_net_outputs.q_values, 1)
-        return self._replay.last_rewards + self.cumulative_gamma * replay_next_qt_max * (1. - tf.cast(self._replay.last_terminals, tf.float32))
+      replay_next_qt_max = tf.reduce_max(self._replay_last_next_target_net_outputs.q_values, 1)
+
+      return (1. - tf.cast(self._replay.last_terminals, tf.float32)) * self._replay.last_rewards + self.cumulative_gamma * replay_next_qt_max
 
     def _build_train_op(self):
         """Builds a training op.
@@ -323,8 +323,8 @@ class DQNAgent(object):
             name='replay_chosen_q')
 
         if self.use_rectifer:
-            # TODO(ming): can use last time step
-            last_target = tf.stop_gradient(self._build_target_q_op())
+            # HINT(ming): for exploration
+            last_target = tf.stop_gradient(self._build_last_target_q_op())
             replay_chosen_q += self.rec_factor * last_target
 
         target = tf.stop_gradient(self._build_target_q_op())
